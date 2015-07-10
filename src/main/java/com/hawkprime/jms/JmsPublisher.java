@@ -8,7 +8,7 @@ import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.DefaultParser;
 import org.apache.commons.cli.HelpFormatter;
-import org.apache.commons.cli.OptionBuilder;
+import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 import org.slf4j.Logger;
@@ -31,58 +31,57 @@ public final class JmsPublisher {
 	 * @throws JMSException JMS exception
 	 */
 	// CHECKSTYLE IGNORE UncommentedMain
-	@SuppressWarnings({ "static-access", "deprecation" })
 	public static void main(final String[] args) throws JMSException {
 		LOG.info("TibCo Message Publisher v1.0");
 		Options options = new Options();
 
-		options.addOption(OptionBuilder
-			.withArgName("url")
-			.withLongOpt("server")
+		options.addOption(Option.builder("s")
+			.argName("url")
+			.longOpt("server")
 			.hasArg()
-			.isRequired()
-			.withDescription("TibCo server URL: \"tcp://192.168.56.202:7222\"")
-			.create("s"));
+			.required()
+			.desc("TibCo server URL: \"tcp://192.168.56.202:7222\"")
+			.build());
 
-		options.addOption(OptionBuilder
-			.withArgName("user")
-			.withLongOpt("user")
-			.hasArg()
-			.isRequired()
-			.withDescription("TibCo user")
-			.create("u"));
+		options.addOption(Option.builder("u")
+				.argName("user name")
+				.longOpt("user")
+				.hasArg()
+				.required()
+				.desc("TibCo user")
+				.build());
 
-		options.addOption(OptionBuilder
-			.withArgName("password")
-			.withLongOpt("pass")
+		options.addOption(Option.builder("p")
+			.argName("password")
+			.longOpt("pass")
 			.hasArg()
-			.isRequired()
-			.withDescription("TibCo password")
-			.create("p"));
+			.required()
+			.desc("TibCo password")
+			.build());
 
-		options.addOption(OptionBuilder
-			.withArgName("name")
-			.withLongOpt("queue")
+		options.addOption(Option.builder("q")
+			.argName("name")
+			.longOpt("queue")
 			.hasArg()
-			.isRequired()
-			.withDescription("TibCo queue name")
-			.create("q"));
+			.required()
+			.desc("TibCo queue name")
+			.build());
 
-		options.addOption(OptionBuilder
-			.withArgName("directory")
-			.withLongOpt("source")
+		options.addOption(Option.builder("d")
+			.argName("directory")
+			.longOpt("source")
 			.hasArg()
-			.isRequired()
-			.withDescription("Source directory")
-			.create("d"));
+			.required()
+			.desc("Source directory")
+			.build());
 
-		options.addOption(OptionBuilder
-			.withArgName("directory")
-			.withLongOpt("target")
+		options.addOption(Option.builder("t")
+			.argName("directory")
+			.longOpt("target")
 			.hasArg()
-			.isRequired()
-			.withDescription("Target directory")
-			.create("t"));
+			.required()
+			.desc("Target directory")
+			.build());
 
 		CommandLine cmd = null;
 		try {

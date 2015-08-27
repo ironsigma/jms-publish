@@ -19,6 +19,12 @@ import org.slf4j.LoggerFactory;
  */
 public final class JmsPublisher {
 	private static final Logger LOG = LoggerFactory.getLogger(JmsPublisher.class);
+	private static final String SERVER_OPT = "server";
+	private static final String SSL_PASS_OPT = "ssl-pass";
+	private static final String SSL_CLIENT_OPT = "ssl-client-key";
+	private static final String SSL_CA_OPT = "ssl-ca";
+	private static final String SSL_SERVER_OPT = "ssl-server-key";
+	private static final String FILE_ARG = "file";
 
 	private JmsPublisher() {
 		/* empty */
@@ -32,12 +38,66 @@ public final class JmsPublisher {
 	 */
 	// CHECKSTYLE IGNORE UncommentedMain
 	public static void main(final String[] args) throws JMSException {
-		LOG.info("TibCo Message Publisher v1.0");
+		LOG.info("TibCo Message Publisher v1.1-m075878");
+
+		CommandLine cmd = parseCommandLine(args);
+
+		final TibcoQueue tibcoQueue = new TibcoQueue(
+					cmd.getOptionValue(SERVER_OPT),
+					cmd.getOptionValue("user"),
+					cmd.getOptionValue("pass"),
+					cmd.getOptionValue("queue"));
+
+		if (isSSLConnection(cmd.getOptionValue(SERVER_OPT))) {
+			tibcoQueue.setSSLSettings(
+					cmd.getOptionValue(SSL_PASS_OPT),
+					cmd.getOptionValue(SSL_CLIENT_OPT),
+					cmd.getOptionValue(SSL_CA_OPT),
+					cmd.getOptionValue(SSL_SERVER_OPT));
+		}
+
+		try {
+			tibcoQueue.connect();
+		} catch (JMSException ex) {
+			LOG.error("\nUnable to connect to TibCo server: \"{}\"", ex.getMessage());
+			return;
+		}
+
+		Runtime.getRuntime().addShutdownHook(new Thread() {
+			@Override
+			public void run() {
+				tibcoQueue.close();
+				LOG.info("Done.");
+			}
+		});
+
+		try {
+
+			DirectoryWatcher watcher = new DirectoryWatcher(cmd.getOptionValue("source"), ".xml");
+
+			FileProcessor fileProcessor = new FileProcessor(tibcoQueue,
+					watcher.getDirectory(), cmd.getOptionValue("target"));
+
+			watcher.setInterval(5);
+			watcher.addListener(fileProcessor);
+
+			LOG.info("Watching directory \"{}\"", watcher.getDirectory());
+			LOG.info("Moving proccessed files to \"{}\"", fileProcessor.getTarget());
+
+			watcher.start();
+
+		} catch (IOException ex) {
+			LOG.error(ex.getMessage());
+		}
+
+	}
+
+	private static CommandLine parseCommandLine(final String[] args) {
 		Options options = new Options();
 
 		options.addOption(Option.builder("s")
 			.argName("url")
-			.longOpt("server")
+			.longOpt(SERVER_OPT)
 			.hasArg()
 			.required()
 			.desc("TibCo server URL: \"tcp://192.168.56.202:7222\"")
@@ -83,6 +143,34 @@ public final class JmsPublisher {
 			.desc("Target directory")
 			.build());
 
+		options.addOption(Option.builder()
+			.argName(FILE_ARG)
+			.longOpt(SSL_CA_OPT)
+			.hasArg()
+			.desc("SSL certificate authority file")
+			.build());
+
+		options.addOption(Option.builder()
+			.argName(FILE_ARG)
+			.longOpt(SSL_SERVER_OPT)
+			.hasArg()
+			.desc("SSL server key file")
+			.build());
+
+		options.addOption(Option.builder()
+			.argName(FILE_ARG)
+			.longOpt(SSL_CLIENT_OPT)
+			.hasArg()
+			.desc("SSL client key file")
+			.build());
+
+		options.addOption(Option.builder()
+			.argName("password")
+			.longOpt(SSL_PASS_OPT)
+			.hasArg()
+			.desc("SSL Password")
+			.build());
+
 		CommandLine cmd = null;
 		try {
 
@@ -93,48 +181,36 @@ public final class JmsPublisher {
 			HelpFormatter formatter = new HelpFormatter();
 			formatter.printHelp(" \n\n", options);
 			System.err.println("\nCommand line error: " + e.getMessage());
-			return;
+			System.exit(1);
 		}
 
-		final TibcoQueue tibcoQueue = new TibcoQueue(
-				cmd.getOptionValue("server"),
-				cmd.getOptionValue("user"),
-				cmd.getOptionValue("pass"),
-				cmd.getOptionValue("queue"));
+		boolean isSSLConnection = isSSLConnection(cmd.getOptionValue(SERVER_OPT));
 
-		try {
-			tibcoQueue.connect();
-		} catch (JMSException ex) {
-			LOG.error("\nUnable to connect to TibCo server: \"{}\"", ex.getMessage());
-			return;
+		boolean hasAnySSLOption = cmd.hasOption(SSL_CA_OPT)
+			|| cmd.hasOption(SSL_SERVER_OPT)
+			|| cmd.hasOption(SSL_CLIENT_OPT)
+			|| cmd.hasOption(SSL_PASS_OPT);
+
+		boolean hasAllRequiredSSLOptions = cmd.hasOption(SSL_CA_OPT)
+			&& cmd.hasOption(SSL_SERVER_OPT)
+			&& cmd.hasOption(SSL_CLIENT_OPT)
+			&& cmd.hasOption(SSL_PASS_OPT);
+
+		if (!isSSLConnection && hasAnySSLOption) {
+			LOG.warn("Ignoring SSL options, server url does not start with \"ssl://\"");
 		}
 
-		Runtime.getRuntime().addShutdownHook(new Thread() {
-			@Override
-			public void run() {
-				tibcoQueue.close();
-				LOG.info("Done.");
-			}
-		});
-
-		try {
-
-			DirectoryWatcher watcher = new DirectoryWatcher(cmd.getOptionValue("source"), ".xml");
-
-			FileProcessor fileProcessor = new FileProcessor(tibcoQueue,
-					watcher.getDirectory(), cmd.getOptionValue("target"));
-
-			watcher.setInterval(5);
-			watcher.addListener(fileProcessor);
-
-			LOG.info("Watching directory \"{}\"", watcher.getDirectory());
-			LOG.info("Moving proccessed files to \"{}\"", fileProcessor.getTarget());
-
-			watcher.start();
-
-		} catch (IOException ex) {
-			LOG.error(ex.getMessage());
+		if ((isSSLConnection || hasAnySSLOption) && !hasAllRequiredSSLOptions) {
+			HelpFormatter formatter = new HelpFormatter();
+			formatter.printHelp(" \n\n", options);
+			System.err.println("\nCommand line error: Missing SSL option");
+			System.exit(1);
 		}
 
+		return cmd;
+	}
+
+	private static boolean isSSLConnection(final String url) {
+		return url.startsWith("ssl:");
 	}
 }

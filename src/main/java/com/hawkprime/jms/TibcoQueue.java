@@ -1,7 +1,6 @@
 package com.hawkprime.jms;
 
 import javax.jms.Connection;
-import javax.jms.ConnectionFactory;
 import javax.jms.Destination;
 import javax.jms.JMSException;
 import javax.jms.MessageProducer;
@@ -10,6 +9,8 @@ import javax.jms.TextMessage;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.tibco.tibjms.TibjmsConnectionFactory;
 
 /**
  * The Class JmsQueue.
@@ -26,6 +27,10 @@ public class TibcoQueue {
 	private String userName;
 	private String password;
 	private String queueName;
+	private String sslPassword;
+	private String sslClientKeyFile;
+	private String sslRootCertAuthFile;
+	private String sslServerCertFile;
 
 	/**
 	 * Instantiates a new TibCo queue.
@@ -45,13 +50,42 @@ public class TibcoQueue {
 	}
 
 	/**
+	 * Set the SSL connection Settings.
+	 *
+	 * @param sslPassword SSL password
+	 * @param sslClientKeyFile client key
+	 * @param sslRootCertAuthFile CA file
+	 * @param sslServerCertFile server key
+	 */
+	public void setSSLSettings(
+			final String sslPassword, final String sslClientKeyFile,
+			final String sslRootCertAuthFile, final String sslServerCertFile) {
+
+		this.sslPassword = sslPassword;
+		this.sslClientKeyFile = sslClientKeyFile;
+		this.sslRootCertAuthFile = sslRootCertAuthFile;
+		this.sslServerCertFile = sslServerCertFile;
+	}
+
+	/**
 	 *  Connect.
 	 *
 	 * @throws JMSException the JMS exception
 	 */
 	public void connect() throws JMSException {
 		LOG.info("Connecting to \"{}/{}\" as \"{}\" ...", serverUrl, queueName, userName);
-		ConnectionFactory factory = new com.tibco.tibjms.TibjmsConnectionFactory(serverUrl);
+		TibjmsConnectionFactory factory = new TibjmsConnectionFactory(serverUrl);
+
+		if (serverUrl.startsWith("ssl:")) {
+			factory.setSSLIdentity(sslClientKeyFile);
+			factory.setSSLPassword(sslPassword);
+			factory.setSSLTrustedCertificate(sslRootCertAuthFile, sslServerCertFile);
+			factory.setSSLVendor("j2se-default");
+			factory.setSSLEnableVerifyHostName(true);
+			factory.setSSLExpectedHostName(getHostName(serverUrl));
+			factory.setSSLEnableVerifyHost(true);
+		}
+
 		connection = factory.createConnection(userName, password);
 		session = connection.createSession(false, javax.jms.Session.AUTO_ACKNOWLEDGE);
 		destination = session.createQueue(queueName);
@@ -83,4 +117,17 @@ public class TibcoQueue {
 			}
 		}
 	}
+
+	/**
+	 * Get the host name from URL.
+	 * @param url URL
+	 * @return host
+	 */
+	private String getHostName(final String url) {
+		if (url.contains(":")) {
+			return url.substring(url.lastIndexOf("/") + 1, url.lastIndexOf(":"));
+		}
+		return url.substring(url.lastIndexOf("/") + 1);
+	}
+
 }

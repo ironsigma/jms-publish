@@ -229,7 +229,7 @@ public class DirectoryWatcher {
 		/**
 		 * Constructor.
 		 *
-		 * @param extension extension with dot prefix (.xml)
+		 * @param extension extension with dot prefix i.e. (.xml)
 		 */
 		public ExtensionFileFilter(final String extension) {
 			this.extension = extension;

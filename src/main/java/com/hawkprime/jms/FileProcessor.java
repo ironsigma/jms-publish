@@ -2,6 +2,8 @@ package com.hawkprime.jms;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 
 import javax.jms.JMSException;
 
@@ -15,6 +17,7 @@ public class FileProcessor implements DirectoryListener {
 	private File targetDirectory;
 	private TibcoQueue tibcoQueue;
 	private String sourceDirectory;
+	private boolean hasHeaders;
 
 	/**
 	 * Constructor.
@@ -22,18 +25,24 @@ public class FileProcessor implements DirectoryListener {
 	 * @param tibcoQueue TibCo queue
 	 * @param sourceDirectory source directory
 	 * @param targetDirectoryPath target directory
+	 * @param hasHeaders File contains headers.
 	 * @throws IOException exception
 	 */
 	public FileProcessor(final TibcoQueue tibcoQueue, final String sourceDirectory,
-			final String targetDirectoryPath) throws IOException {
+			final String targetDirectoryPath, final boolean hasHeaders) throws IOException {
 
 		this.tibcoQueue = tibcoQueue;
 		this.sourceDirectory = sourceDirectory;
 		this.targetDirectory = new File(targetDirectoryPath).getCanonicalFile();
+		this.hasHeaders = hasHeaders;
 
 		if (!targetDirectory.isDirectory()) {
 			LOG.error("Path \"{}\" is not a directory.", targetDirectoryPath);
 			throw new IOException("Target directory does not exist.");
+		}
+
+		if (hasHeaders) {
+			LOG.info("File can contain headers");
 		}
 	}
 
@@ -52,12 +61,18 @@ public class FileProcessor implements DirectoryListener {
 	 * @param file file
 	 * @return true if successful, false otherwise.
 	 */
+	@SuppressWarnings("unchecked")
 	private void processFile(final File file) {
 		try {
 
 			String relativePath = file.getAbsolutePath().replace(sourceDirectory, "");
 			LOG.info("Processing file \"{}\"", relativePath);
-			tibcoQueue.sendMessage(FileUtils.readFileToString(file));
+			if (hasHeaders) {
+				Map<String, Object> message = splitMessage(FileUtils.readFileToString(file));
+				tibcoQueue.sendMessage((String) message.get("message"), (Map<String, String>) message.get("headers"));
+			} else {
+				tibcoQueue.sendMessage(FileUtils.readFileToString(file));
+			}
 			LOG.info("Message published to queue from file \"{}\"", relativePath);
 
 		} catch (IOException e) {
@@ -70,6 +85,40 @@ public class FileProcessor implements DirectoryListener {
 		}
 
 		moveFileToTargetDirectory(file);
+	}
+
+	private Map<String, Object> splitMessage(String text) {
+		Map<String, Object> message = new HashMap<String, Object>();
+		StringBuilder messageText = new StringBuilder();
+		Map<String, String> headers = new HashMap<String, String>();
+
+		boolean inHeader = true;
+		for (String line : text.split("\\r?\\n")) {
+			if (inHeader) {
+				// empty line, no more headers
+				if (line.trim().length() == 0) {
+					inHeader = false;
+					continue;
+				}
+
+				// found separator and there's only one separator
+				int index = line.indexOf(":");
+				if (index != -1 && index == line.lastIndexOf(":")) {
+					String[] components = line.split(":\\s*");
+					headers.put(components[0], components[1]);
+					continue;
+				}
+
+				inHeader = false;
+			}
+
+			messageText.append(line);
+			messageText.append("\n");
+		}
+
+		message.put("headers", headers);
+		message.put("message", messageText.toString());
+		return message;
 	}
 
 	@Override

@@ -9,6 +9,7 @@ import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.DefaultParser;
 import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Option;
+import org.apache.commons.cli.OptionBuilder;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 import org.slf4j.Logger;
@@ -73,15 +74,17 @@ public final class JmsPublisher {
 
 		try {
 
-			DirectoryWatcher watcher = new DirectoryWatcher(cmd.getOptionValue("source"), ".xml");
+			final String extension =cmd.getOptionValue("extension", ".xml");
+
+			DirectoryWatcher watcher = new DirectoryWatcher(cmd.getOptionValue("source"), extension);
 
 			FileProcessor fileProcessor = new FileProcessor(tibcoQueue,
-					watcher.getDirectory(), cmd.getOptionValue("target"));
+					watcher.getDirectory(), cmd.getOptionValue("target"), cmd.hasOption("headers"));
 
 			watcher.setInterval(5);
 			watcher.addListener(fileProcessor);
 
-			LOG.info("Watching directory \"{}\"", watcher.getDirectory());
+			LOG.info("Watching directory \"{}\" for {} files", watcher.getDirectory(), extension);
 			LOG.info("Moving proccessed files to \"{}\"", fileProcessor.getTarget());
 
 			watcher.start();
@@ -102,6 +105,13 @@ public final class JmsPublisher {
 			.required()
 			.desc("TibCo server URL: \"tcp://192.168.56.202:7222\"")
 			.build());
+
+		options.addOption(Option.builder("e")
+				.argName("file extension")
+				.longOpt("extension")
+				.hasArg()
+				.desc("Files to pickup (default: .xml)")
+				.build());
 
 		options.addOption(Option.builder("u")
 				.argName("user name")
@@ -142,6 +152,11 @@ public final class JmsPublisher {
 			.required()
 			.desc("Target directory")
 			.build());
+
+		options.addOption(Option.builder("h")
+				.longOpt("headers")
+				.desc("Top of file include headers that end at an empty line (Header Name: Header Value")
+				.build());
 
 		options.addOption(Option.builder()
 			.argName(FILE_ARG)

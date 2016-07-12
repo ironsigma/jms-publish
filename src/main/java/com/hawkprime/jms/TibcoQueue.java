@@ -1,5 +1,8 @@
 package com.hawkprime.jms;
 
+import java.util.Map;
+import java.util.Map.Entry;
+
 import javax.jms.Connection;
 import javax.jms.Destination;
 import javax.jms.JMSException;
@@ -100,6 +103,23 @@ public class TibcoQueue {
 	 */
 	public void sendMessage(final String message) throws JMSException {
 		TextMessage msg = session.createTextMessage();
+		msg.setText(message);
+		msgProducer.send(destination, msg);
+	}
+
+	/**
+	 * Send queue message with headers.
+	 *
+	 * @param message the message
+	 * @param headers the message headers
+	 * @throws JMSException the JMS exception
+	 */
+	public void sendMessage(final String message, Map<String, String> headers) throws JMSException {
+		TextMessage msg = session.createTextMessage();
+		for (Entry<String, String> header : headers.entrySet()) {
+			LOG.info("Adding Header: \"{}\": \"{}\"", header.getKey(), header.getValue());
+			msg.setStringProperty(header.getKey(), header.getValue());
+		}
 		msg.setText(message);
 		msgProducer.send(destination, msg);
 	}

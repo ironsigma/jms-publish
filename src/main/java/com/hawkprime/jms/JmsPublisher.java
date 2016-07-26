@@ -39,7 +39,7 @@ public final class JmsPublisher {
 	 */
 	// CHECKSTYLE IGNORE UncommentedMain
 	public static void main(final String[] args) throws JMSException {
-		LOG.info("TibCo Message Publisher v1.1-m075878");
+		LOG.info("TibCo Message Publisher v1.2.0-m075878");
 
 		CommandLine cmd = parseCommandLine(args);
 
